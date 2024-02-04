@@ -1,0 +1,203 @@
+                        JARxxx:  Cookie Jar Manager
+                                by Dan Wilga
+                      Copyright 1992, Gribnif Software
+                      
+This program may be freely distributed, even with commercial products, so
+long as this documentation file is included, and both it and the program
+are unmodified.
+
+
+What is the Cookie Jar, anyway?
+------------------------------
+
+When Atari created TOS 1.60, they added a feature to the operating system
+which had been needed for some time. It allows programs to store
+information in a place where any other program can look for it. This Cookie
+Jar is very useful for things like an AUTO folder program which wants to be
+able to leave some information around for a companion desk accessory to
+look at. Also, newer versions of the operating system use cookies to tell
+programs what types of hardware the computer has. Atari even provided a
+documented method for programs to create a Cookie Jar for older versions of
+TOS.
+
+
+Fine, so why do I need this program?
+-----------------------------------
+
+When Atari documented how to use the Cookie Jar, it outlined how
+programmers should create new cookies and how to see what value a
+particular cookie has. Unfortunately, the procedure for doing this is not
+all that simple. The result was that some programs either go about it
+half-heartedly, or do not work correctly in all cases.
+
+What JARxxx does is take the "dirty work" away and simplify the whole
+process of using the Cookie Jar. It provides a standard way for programs to
+look for cookies and create new ones. It also establishes a new jar, as
+large as you want it to be, for all future programs to use.
+
+If you received this program as part of another package, you will probably
+need it in order for the other program to run properly. NeoDesk, for
+instance, requires JARxxx, so that it can create a cookie to use later on.
+Even if you do not have a program which takes advantage of the code in
+JARxxx to look for and create new cookies, you can still benefit from its
+ability to enlarge the Cookie Jar, since some programs which create cookies
+will give an error message when the Cookie Jar is full, rather than making
+it larger.
+
+
+Installation
+------------
+
+JARxxx is very easy to install. All you have to do is copy JARXXX.PRG into
+the AUTO folder of the disk you normally boot from. Then, rename the
+program so that the "XXX' is a number. This number, which is the quantity
+of new cookies to make space for in the jar, can be anywhere from 0 to 999.
+
+Usually, a program will only create one cookie for itself, if it creates
+any at all. A value of 10 extra cookies will probably be more than enough
+for most people. They take up very little memory (8 bytes each), so don't
+worry about making the number too large.
+
+If you make this number too small, a program may quit with a message like
+"Not enough room in cookie jar". If this happens, you can either run
+JARxxx.PRG again from the desktop (to double the number of entries), or
+increase the number by changing the name of the file in the AUTO folder.
+
+Probably the most common type of program to use the Cookie Jar is one which
+runs in the AUTO folder. Since it is not easy to tell which programs use
+the Jar, it is safest to just make sure that JARxxx runs before all other
+AUTO folder programs. If you use a boot configuration program like XBoot,
+however, you can probably leave the configuration program as first, and
+make JARxxx second. To accomplish this, there is a program called AUTOFRST
+which is also included with JARxxx.
+
+AUTOFRST will take whatever program you tell it to and reposition it so
+that it will be the first program the operating system loads from the AUTO
+folder.  You tell AUTOFRST which program to make first by giving it the full
+path of that file on the TTP commandline. For instance, if you tell it
+"c:\auto\jar16.prg", then JAR16.PRG will be moved to the first position.
+
+AUTOFRST can actually be used to reorder the files in any directory, not
+just the AUTO folder. It can also be given a list of filenames, like this:
+
+  c:\auto\jar16.prg xboot.prg neoload.prg templmon.prg
+
+
+Technical Stuff
+---------------
+
+The Cookie Jar is pointed to by a variable called _p_cookies, which is
+located at $5A0. If there is no jar installed, this memory location
+contains a null pointer. Each cookie in the jar is two longwords in size:
+
+                     longword 1  longword 2
+                   -------------------------
+        Cookie #1  | ID Number |   Value   |
+                   -------------------------
+        Cookie #2  | ID Number |   Value   |
+                   -------------------------
+        ...
+                   -------------------------
+        Cookie #n  | ID Number |   Value   |
+                   -------------------------
+    Length Cookie  | 0 (long)  | Jar Size  |
+                   -------------------------
+        
+The first longword in a cookie is an ID number. This should somehow
+describe what program installed the cookie. A common practice is to use a
+longword whose ASCII value is an abbreviation for the program.  For
+example, JARxxx installs a cookie whose ID is "CJar" ($434A6172).  Atari
+has reserved all ID's beginning with "_" for use by the operating system.
+You should not use ID's beginning with this character.
+
+The "Value" field of a cookie can contain any information at all, but since
+there are only four bytes of space, the most common thing to do is to use
+this to store a pointer to a larger structure which can hold more
+information.
+
+The last cookie in the jar has an ID of zero (long). This indicates the end
+of the cookie jar. The "value" of this cookie is actually a longword
+indicating how many entries the entire jar can hold. This number does NOT
+include the length cookie, itself. Therefore, a jar large enough for 10 new
+cookies must actually be 11 entries (or 22 longwords) in size.
+
+
+Programming Using JARxxx
+------------------------
+
+JARxxx works by first copying the old Cookie Jar to a new location, if
+necessary. This depends on the number of entries requested. If the number
+of requested entries is less than the current number of empty entries, the
+jar is not changed. This means that if you just want to install the jar
+management code without increasing the jar, you simply need to request 0
+entries. JARxxx also intercepts trap #14 (XBIOS) and the reset vector (to
+clean up the Cookie Jar for older versions of the operating system.)
+
+If you want to use JARxxx's routines in your own program, here is all you
+need to do. There is a new XBIOS routine ($434A) which is installed by
+JARxxx to handle requests by a program. A C language binding:
+
+        int CJar( int mode, long cookie, long *value )
+
+Mode 0 will retrieve the "cookie" and store its value in the longword
+pointed to by the long pointer.  If the long pointer is null (zero), then
+the value is not stored anywhere.  The value $6172 is returned if the
+search was successful; 0 is returned if the cookie was not found. Any other
+value greater than zero can be assumed to mean that JARxxx is not
+installed.  Values less than zero are currently reserved.
+
+This mode can, and should be, used to determine if JARxxx is installed
+before actually creating a new cookie.  If the "cookie" parameter is
+$434A6172 ("CJar") and the number $6172 is returned, then JARxxx is
+installed.  In this situation, any other return value means JARxxx is not
+installed.  If the "value" pointer is not null (zero), then the longword
+pointed to by it is modified to contain the following information:
+
+        high word, high byte:   Version number, starting at $01.
+
+        high word, low byte:    An unsigned byte indicating the number of
+                                cookie jar entries specified by the user. A
+                                value of zero means 256 or more.
+
+        low word, high byte:    An unsigned byte indicating the number of
+                                cookie jar entries actually allocated.
+                                This includes any cookie jar entries which
+                                already existed when JARxxx first ran.  A
+                                value of zero means 256 or more.
+
+        low word, low byte:     An unsigned byte indicating the number of
+                                cookie jar entries currently being used.  A
+                                value of zero means 256 or more.
+
+Mode 1 creates a new cookie.  In this case, "value" points to a longword
+whose *contents* are copied into the cookie jar.  If "value" is null
+(zero), then a value of zero is entered into the cookie jar.  This is
+useful for situations where the mere presence of the new cookie in the jar
+is sufficient.  If the cookie already exists, the old value is overwritten.
+This mode returns $6172 if the addition was successful or -1 if the
+addition failed due to lack of room in the cookie jar.  All other return
+values are currently reserved.
+
+All other modes are reserved.
+
+For an example of how to use this call in a C program, please refer to the
+file JARTEST.C, which is included with this document.
+
+
+Contact
+-------
+
+If you have any questions or comments about this program, please feel free
+to get in touch with me. I want to make sure as many people use this
+program as possible.
+
+        Dan Wilga
+        Gribnif Software
+        P.O. Box 779
+        Northampton, MA  01061
+        
+        GEnie:    GRIBNIF
+        Internet: gribnif@genie.geis.com
+        
+        Voice: (413) 532-2434
+        Fax:   (413) 532-2540
